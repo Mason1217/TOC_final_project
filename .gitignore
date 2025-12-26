@@ -221,3 +221,4 @@ __marimo__/
 
 # gitignore
 API_KEY.py
+./data/*
