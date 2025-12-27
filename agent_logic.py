@@ -1,17 +1,23 @@
 import time
 
-def analyze_content(text):
-    """狀態 2: 判斷主客觀與生成關鍵字 [cite: 6, 7, 10]"""
-    time.sleep(2) # 模擬 LLM 思考時間
-    if "我覺得" in text or "好漂亮" in text:
-        return {"status": "subjective", "keywords": []}
-    return {"status": "objective", "keywords": ["2024 奧運 獎牌榜"]}
-
-def search_and_verify(keywords):
-    """狀態 3 & 4: 搜尋與驗證 [cite: 12, 17]"""
-    # 這裡會用到 Tavily API [cite: 14, 24]
-    time.sleep(5) # 模擬爬蟲長時間運作
+def analyze_claims(text):
+    """
+    State 2a: LLM 第一次分析，拆分客觀論述
+    開發者：LLM 負責人
+    """
+    time.sleep(2) # 模擬 LLM 運行
     return [
-        {"claim": "台灣獲得 2 面金牌", "fact": "事實查核：正確", "url": "https://example.com/news1"},
-        {"claim": "總排名第一", "fact": "事實查核：錯誤，實際為第 XX 名", "url": "https://example.com/news2"}
+        "114年10月臺南市住宅價格指數為140.25",
+        "大廈價格指數較前期微幅下降0.04%"
+    ]
+
+def fact_check_claims(claims):
+    """
+    State 3a: 爬蟲 + LLM 第二次分析，生成事實報告
+    開發者：爬蟲 + LLM 負責人整合
+    """
+    time.sleep(4) # 模擬爬蟲與第二次 LLM 運行
+    return [
+        {"claim": claims[0], "fact": "事實查核：正確。根據內政部數據...", "url": "https://pip.moi.gov.tw/"},
+        {"claim": claims[1], "fact": "事實查核：有誤。實際應為上升 0.01%...", "url": "https://example.com/news"}
     ]
