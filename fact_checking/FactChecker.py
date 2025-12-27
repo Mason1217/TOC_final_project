@@ -55,7 +55,92 @@ class FactChecker:
         cleaned_result = self.__validate_analysis_res(raw_result)
 
         return cleaned_result
-    
+
+    def generate_search_keywords(
+            self,
+            claim: str,
+    ) -> List[str]:
+        """
+        針對單一陳述句，生成搜尋關鍵字
+
+        Args:
+            claim(str):
+
+        Returns:
+            keyword_list(List):
+                ["關鍵字組合1", "關鍵字組合2", "關鍵字組合3"]
+        
+        """
+        system_prompt = """
+        你是一個搜尋引擎專家 (SEO Expert)。
+        請針對使用者提供的「陳述句」，生成 3 組適合 Google 搜尋的關鍵字。
+        目標是找到能驗證該陳述句真偽的新聞或資料。
+
+        請回傳 JSON 格式：
+        {
+            "keywords": ["關鍵字組合1", "關鍵字組合2", "關鍵字組合3"]
+        }
+        """
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"需要驗證的陳述句：{claim}"}
+        ]
+
+        result = self.client.chat(messages, json_mode=True)
+        
+        if result and "keywords" in result:
+            return result["keywords"]
+        return []
+
+    def verify_claim(
+            self,
+            claim: str,
+            search_evidence: str,
+    ) -> Dict[str, Any]:
+        """
+        判斷與原始文章的關聯性 (驗證真偽)
+
+        Args:
+            claim(str):
+            search_evidence(str):
+
+        Returns:
+            result(Dict[str, Any]):
+                {\n
+                    **"verdict"**           : "Correct" | "Incorrect" | "Unverifiable",\n
+                    **"confidence_score"**  : 0-10,\n
+                    **"reason"**            : "請引用證據說明判定理由"\n
+                }
+
+        """
+        system_prompt = """
+        你是一個公正的法官。
+        請比對「原始主張」與「搜尋到的證據」，判斷主張的真實性。
+
+        請回傳 JSON 格式：
+        {
+            "verdict": "Correct" | "Incorrect" | "Unverifiable",
+            "confidence_score": 0-10,
+            "reason": "請引用證據說明判定理由"
+        }
+        """
+        
+        user_content = f"""
+        【原始主張】：{claim}
+        【搜尋證據】：{search_evidence}
+        """
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content}
+        ]
+
+        raw_result = self.client.chat(messages, json_mode=True)
+        cleaned_result = self.__validate_verify_res(raw_result)
+        
+        return cleaned_result
+
     def __validate_analysis_res(
             self,
             result: Any,
@@ -91,15 +176,50 @@ class FactChecker:
 
         return safe_output
 
-    def generate_search_keywords(
+    def __validate_verify_res(
             self,
-            claim: str,
-    ) -> List[str]:
-        pass
-
-    def verify_claim(
-            self,
-            claim: str,
-            search_evidence: str,
+            result: Any,
     ) -> Dict[str, Any]:
-        pass
+        
+        safe_output = {
+            "verdict": "Unverifiable",
+            "confidence_score": 0,
+            "reason": "LLM 回傳格式錯誤或無法解析",
+            "error": None
+        }
+
+        if not result or not isinstance(result, dict):
+            safe_output["error"] = "LLM_NO_RESPONSE_OR_INVALID_FORMAT"
+            return safe_output
+
+        raw_verdict = result.get("verdict", "Unverifiable")
+
+        VALID_VERDICTS = {"Correct", "Incorrect", "Unverifiable"}
+        POSSIBLE_CORRECT = ["True", "Yes", "Supported"]
+        POSSIBLE_INCORRECT = ["False", "No", "Refuted"]
+        
+        if isinstance(raw_verdict, str):
+            cleaned_verdict = raw_verdict.strip().title()
+            
+            if cleaned_verdict in VALID_VERDICTS:
+                safe_output["verdict"] = cleaned_verdict
+            else:
+                if cleaned_verdict in POSSIBLE_CORRECT:
+                    safe_output["verdict"] = "Correct"
+                elif cleaned_verdict in POSSIBLE_INCORRECT:
+                    safe_output["verdict"] = "Incorrect"
+                else:
+                    safe_output["verdict"] = "Unverifiable"
+        else:
+            safe_output["verdict"] = "Unverifiable"
+
+        raw_score = result.get("confidence_score", 0)
+        try:
+            score = int(raw_score)
+            safe_output["confidence_score"] = max(0, min(10, score))
+        except (ValueError, TypeError):
+            safe_output["confidence_score"] = 0
+
+        safe_output["reason"] = str(result.get("reason", "未提供理由"))
+
+        return safe_output
