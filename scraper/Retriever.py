@@ -11,7 +11,7 @@ class Retriever():
 
     BASIC = "basic"
     ADVANCED = "advanced"
-    DEFAULT_COUNTRY = "taiwan"
+    DEFAULT_COUNTRY = None  # not specified
     DEFAULT_TOPIC = "general"
     IGNORE_TIME_DURATION = "all_time"
 
@@ -47,15 +47,14 @@ class Retriever():
                 start_date=start_date, 
                 end_date=end_date, 
                 topic=self.__topic_check(query.get("topic", self.DEFAULT_TOPIC)), 
-                auto_parameters=True, 
                 include_usage=True
             )
         except Exception as e:
             print(f"❌ Tavily Search Error: {e}")
             return None
         
-        with JsonFileHandler(".", "raw_evidence.json", "w") as ha:
-            ha.write(response)
+        # with JsonFileHandler(".", "raw_evidence.json", "w") as ha:
+        #     ha.write(response)
 
         # --- Parsing Response ---
         output = dict()
@@ -63,7 +62,6 @@ class Retriever():
         output["query"] = response.get("query", query["query"])
         output["response_time"] = response.get("response_time", 0.0)
         output["usage"] = response.get("usage", dict())
-        output["auto_parameters"] = response.get("auto_parameters", dict())
         
         raw_results = response.get("results", [])
         cleaned_results = []
@@ -91,7 +89,8 @@ class Retriever():
             return self.DEFAULT_COUNTRY
         country_map = {
             "US": "united states",
-            "UK": "united kingdom"
+            "UK": "united kingdom", 
+            "Global": None
         }
         return country_map.get(country, country.lower())
 
