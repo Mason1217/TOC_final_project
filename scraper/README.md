@@ -3,17 +3,6 @@
 1. 整合了 **Tavily API** 進行非同步網路搜尋。
 2. 具備自動化的本地快取（Local Cache）與檔案索引管理功能，能有效節省 API 額度並加速重複查詢的回應時間。
 
-##  資料儲存位置 (Evidence Location)
-
-所有的搜尋結果證據（Evidence）與索引檔案會自動儲存於專案根目錄下的 `data/evidence` 資料夾中。
-
-* **儲存路徑**: `project_root/data/evidence/`
-* **檔案結構**:
-    * `index.json`: 記錄 Query String 與對應檔案名稱的映射表 (Key-Value Map)。
-    * `evidence.json`, `evidence1.json`...: 實際存放搜尋結果的 JSON 檔案。
-
-> **注意**: 模組會自動建立此資料夾結構，無需手動建立。
-
 ---
 
 ## 安裝與設定
@@ -30,6 +19,80 @@
     # API_KEY.py
     TAVILY_API_KEY = "你的_Tavily_API_Key"
     ```
+---
+
+##  資料儲存位置 (Evidence Location)
+
+所有的搜尋結果證據（Evidence）與索引檔案會自動儲存於專案根目錄下的 `data/evidence` 資料夾中。
+
+* **儲存路徑**: `project_root/data/evidence/`
+* **檔案結構**:
+    * `index.json`: 記錄 Query String 與對應檔案名稱的映射表 (Key-Value Map)。
+    * `evidence.json`, `evidence1.json`...: 實際存放搜尋結果的 JSON 檔案。
+
+> **注意**: 模組會自動建立此資料夾結構，無需手動建立。
+
+---
+
+## `EvidenceRetrieveHandler` 的 Query Format
+```Python
+{
+    # --- 必填欄位 ---
+    "query": "你的搜尋關鍵字",  # (str) 搜尋的主題，例如 "台灣 2024 GDP"
+
+    # --- 選填欄位 (Optional) ---
+    "search_region": "Taiwan",   # (str) 搜尋地區代碼 (如 "US", "UK", "Taiwan", "CN")
+                                 # 預設: None (Global)
+
+    "search_duration": "all_time", # (str 或 list) 時間範圍
+                                   # 若要指定具體區間，請傳 list: ["2023-01-01", "2023-12-31"]
+                                   # 若傳 "all_time" 或未提供，則不限制時間。
+
+    "topic": "general",          # (str) 搜尋主題類別
+                                 # 支援: "general", "news", "finance"
+                                 # 預設: "general"
+    
+    # --- 以下參數通常由 Handler 的引數覆寫，但也可以寫在這裡 ---
+    "level": "advanced",         # (str) "basic" 或 "advanced"
+    "result_count": 5,           # (int) 預計抓取的結果數量
+    "chunk_count": 3             # (int) 每個結果抓取的文字片段數 (僅 Advanced 模式有效)
+}
+```
+
+---
+
+## `EvidenceRetrieveHandler` 的 Output Format
+```Python
+{
+    # --- 核心資訊 ---
+    "summary": "Tavily 生成的簡短回答...",  # (str) 針對 Query 的直接回答 (Answer)
+    "query": "原始查詢字串",              # (str) 用來確認這是針對哪個 Query 的結果
+    
+    # --- 搜尋結果列表 ---
+    "results": [
+        {
+            "title": "網頁標題",          # (str) 來源文章標題
+            "link": "https://...",      # (str) 來源網址 (URL)
+            "article": "完整內文...",     # (str) 網頁的原始純文字內容 (Raw Content)
+            "chunks": [                 # (list[str]) 根據語意切分的重點片段
+                "片段 1...", 
+                "片段 2..."
+            ],
+            "score": 0.95               # (float) 關聯度分數 (Relevance Score)
+        },
+        # ... 更多結果
+    ],
+
+    # --- 系統資訊 ---
+    "file_id": "evidence1.json",        # (str) 此結果儲存在本地的檔名 (由 Handler 自動附加)
+    "response_time": 1.25,              # (float) API 回應耗時 (秒)
+    "usage": {                          # (dict) Token 使用量資訊
+        "completion_tokens": 0,
+        "prompt_tokens": 0,
+        "total_tokens": 0
+    }
+}
+```
 
 ---
 
