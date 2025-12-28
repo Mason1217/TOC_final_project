@@ -118,13 +118,15 @@ class FactChecker:
                 }
             
         """
-        current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+        now = datetime.datetime.now()
+        current_date_str = now.strftime("%Y-%m-%d")
+        last_year = now.year - 1
 
         system_prompt = f"""
         你是一個頂尖的 Google 搜尋引擎優化 (SEO) 專家。
         你的任務是將使用者提供的「陳述句 (Claim)」，轉換為最能找到真相的「搜尋字串 (Search Queries)」。
         
-        現在時間是 {current_date}。
+        現在時間是 {current_date_str}。
         陳述句背景：
         ---
         {article_context[:800]}...
@@ -137,9 +139,12 @@ class FactChecker:
         4. **語言**：JSON 內容必須嚴格使用「繁體中文」。
         
         【範例】：
-        Input Claim: "台積電 2023 年營收創下歷史新高，突破 2 兆元。"
-        Bad Output: ["請搜尋台積電去年的財報", "確認台積電營收是否突破 2 兆"] (太長、包含指令)
-        Good Output: ["台積電 2023 營收", "台積電 2023 財報 2兆", "台積電 營收歷史新高 真實性"]
+        Input Claim: "台積電 {last_year} 年營收創下歷史新高，突破 2 兆元。"
+        Bad Output: ["請搜尋台積電去年的財報", "確認台積電營收是否突破 2 兆"]
+        Good Output: ["台積電 {last_year} 營收", "台積電 {last_year} 財報 2兆", "台積電 營收歷史新高 真實性"]
+
+        Input Claim: "昨天發生了規模 6.8 的地震。"
+        Good Output: ["台灣 地震 {now.year}", "規模 6.8 地震 災情", "昨日地震 震央"]
 
         Input Claim: "伊萊雯在影集中死掉了。"
         Good Output: ["怪奇物語 伊萊雯 結局", "Eleven Stranger Things death scene", "伊萊雯 死亡 第幾季"]
