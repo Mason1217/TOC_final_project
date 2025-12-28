@@ -112,7 +112,7 @@ class FactChecker:
         Returns:
             search_dict(Dict):
                 {\n
-                    **"search_duration"**: [YYYY/MM/DD(str), YYYY/MM/DD(str)],\n
+                    **"search_duration"**: "all_time" | "last_year" | "last_month,\n
                     **"search_region"**: "Taiwan"(str),\n
                     **"questions"**: [q1(str), q2(str), ...],\n
                 }
