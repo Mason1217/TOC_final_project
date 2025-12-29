@@ -7,7 +7,7 @@ from API_KEY import OLLAMA_API_KEY as KEY
 # import os # 改從環境變數讀取(for Zeabur)
 # KEY = os.getenv("OLLAMA_API_KEY")
 
-DEBUG = 1
+DEBUG = 0
 API_URL = "https://api-gateway.netdb.csie.ncku.edu.tw/api/chat"
 DEFAULT_MODEL = "gemma3:4b"
 

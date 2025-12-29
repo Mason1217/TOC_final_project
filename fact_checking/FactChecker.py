@@ -269,7 +269,8 @@ class FactChecker:
             ]
         else:
             safe_output["claims"] = []
-
+        if DEBUG:
+            print(f"[analyze_article]\n{safe_output}\n[analyze_article]\n")
         return safe_output
 
     def __validate_verify_res(
@@ -351,6 +352,6 @@ class FactChecker:
             safe_output["error"] = "No questions generated"
 
         if DEBUG:
-            print(f"[DEBUG]\n{safe_output}\n[DEBUG]\n")
+            print(f"[search_question]\n{safe_output}\n[search_question]\n")
 
         return safe_output
