@@ -2,6 +2,7 @@ import streamlit as st
 import time
 import random
 import concurrent.futures
+import os
 
 # 引入模組
 from fact_checking.OllamaClient import OllamaClient
@@ -33,7 +34,7 @@ TEACHER_QUOTES = [
     {"text": "人有三急（開始傳加分點名單）"}
 ]
 
-st.set_page_config(page_title="Fact Mason & Alvin check center", layout="centered")
+st.set_page_config(page_title="Kun-Ta.FCC", layout="centered")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -42,7 +43,7 @@ if "processing" not in st.session_state:
 if "last_input" not in st.session_state:
     st.session_state.last_input = ""
 
-# --- 2. 強化版執行引擎 (修正 avatar 重疊問題) ---
+# --- 2. 強化版執行引擎 ---
 def run_engine_safe(task_func, args, min_time, loading_type, current_avatar):
     placeholder = st.empty()
     start_time = time.time()
@@ -50,25 +51,26 @@ def run_engine_safe(task_func, args, min_time, loading_type, current_avatar):
         future = executor.submit(task_func, *args)
         while (not future.done()) or (time.time() - start_time < min_time):
             with placeholder.container():
-                # 這裡會根據傳入的 current_avatar 顯示
                 with st.chat_message("assistant", avatar=current_avatar):
                     if loading_type == "text":
                         st.write("Mason 正在利用 Ollama 拆解論述...")
-                        st.caption("🧠 深度運算中...")
+                        st.caption("🧠 brainstorming...")
                     else:
-                        item = random.choice(TEACHER_QUAYES) if 'TEACHER_QUOTES' in locals() else {"text": "載入中..."}
-                        # 在老師名言模式，同樣顯示 AI_AVATAR
-                        st.warning(random.choice(TEACHER_QUOTES)["text"])
+                        # 修正拼字：TEACHER_QUATES -> TEACHER_QUOTES
+                        # 修正判定：locals() -> globals()
+                        quote_list = globals().get('TEACHER_QUOTES', [{"text": "載入中..."}])
+                        st.warning(random.choice(quote_list)["text"])
             time.sleep(2.0)
         
         placeholder.empty()
         result = future.result()
+        # 如果回傳 None 或發生超時
         if result is None:
-            raise TimeoutError("nckucsie API gate TIMEOUT/ERROR, Please try again。")
+            raise TimeoutError("NCKU CSIE API Gateway 響應超時 (Read Timeout)，請稍後再試。")
         return result
 
 # --- 3. 頁面渲染 ---
-st.title("Fact Mason & Alvin check center")
+st.title("Kun-Ta Fact Check Center")
 
 # 側邊欄
 with st.sidebar:
@@ -94,14 +96,19 @@ if prompt := st.chat_input(input_placeholder, disabled=st.session_state.processi
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.rerun()
 
-# --- 4. 核心狀態機邏輯 (移除外部巢狀 chat_message) ---
+# --- 4. 核心狀態機邏輯 ---
 if st.session_state.processing and st.session_state.messages[-1]["role"] == "user":
     user_input = st.session_state.messages[-1]["content"]
     
     try:
-        # 第一階段：Ollama 分析 (使用 USER_AVATAR1)
+        # 第一階段：Ollama 分析
         analysis_res = run_engine_safe(real_analyze_claims, (checker, user_input), 3.0, "text", USER_AVATAR1)
         
+        # 關鍵修正：若後端捕獲到 API 錯誤並回傳解析錯誤，應視為異常而非主觀
+        reason_str = analysis_res.get('reason', '')
+        if "解析錯誤" in reason_str or "無法判定" in reason_str:
+             raise ConnectionError(f"後端 API 連結失敗：{reason_str}")
+
         if analysis_res["is_subjective"]:
             report_md = f"⚠️ **不需查核**：這是一篇主觀內容。\n\n**理由**：{analysis_res['reason']}"
             with st.chat_message("assistant", avatar=AI_AVATAR):
@@ -113,14 +120,12 @@ if st.session_state.processing and st.session_state.messages[-1]["role"] == "use
             claims = analysis_res["claims"]
             claims_md = "**📍 擷取到的客觀論點：**\n" + "\n".join([f"- {c}" for c in claims])
             
-            # 顯示中間結果 (分析完畢後轉回 AI_AVATAR)
             with st.chat_message("assistant", avatar=AI_AVATAR):
                 st.markdown(claims_md)
             
-            # 第二階段：事實查核 (使用 AI_AVATAR)
+            # 第二階段：事實查核
             final_results = run_engine_safe(real_fact_check, (checker, scraper, claims, user_input), 5.0, "teacher", AI_AVATAR)
             
-            # 組合最終報告
             report_md = "### 🛡️ 事實查核報告\n\n"
             for item in final_results:
                 is_correct = (item["status"] == "correct")
@@ -140,6 +145,7 @@ if st.session_state.processing and st.session_state.messages[-1]["role"] == "use
             st.rerun()
 
     except Exception as e:
+        # 這裡會正確捕獲 Timeout 或 ConnectionError
         error_md = f"❌ **連線異常**：{str(e)}"
         with st.chat_message("assistant", avatar=AI_AVATAR):
             st.error(error_md)

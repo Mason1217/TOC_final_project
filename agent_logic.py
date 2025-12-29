@@ -1,4 +1,5 @@
 import time
+import concurrent.futures
 from concurrent.futures import Future
 from fact_checking.FactChecker import FactChecker
 from scraper.EvidenceRetrieveHandler import EvidenceRetrieveHandler
@@ -6,66 +7,101 @@ from scraper.EvidenceFileHandler import EvidenceFileHandler
 
 def real_analyze_claims(checker: FactChecker, text: str):
     """
-    對接 State 2a: 分析文章
+    對接 State 2a: 分析文章，提取客觀論點
     """
-    # 呼叫 FactChecker 分析文章主客觀與擷取論點
     result = checker.analyze_article(text)
     
-    # [cite_start]根據 PDF 流程圖：若為主觀，回傳特殊標記 [cite: 9]
+    if result is None:
+        return None
+        
+    reason = result.get("subjectivity_reason", "")
+    if "無法判定" in reason or "解析錯誤" in reason:
+        return None 
+
     if result.get("is_subjective"):
-        return {"is_subjective": True, "reason": result.get("subjectivity_reason")}
+        return {"is_subjective": True, "reason": reason}
     
     return {"is_subjective": False, "claims": result.get("claims", [])}
-    # return None # 模擬 API 回傳空值（超時或故障）
 
 def real_fact_check(checker: FactChecker, scraper_handler: EvidenceRetrieveHandler, claims: list, article_context: str):
     """
-    對接 State 3a: 搜尋關鍵字 -> 爬蟲搜尋 -> LLM 驗證判定
+    對接 State 3a: 採用 Multi-threading 併發處理
     """
-    final_results = []
     
-    for claim in claims:
-        # 1. 取得 LLM 生成的搜尋計畫 (內含 "questions" 清單)
-        query_plan = checker.generate_search_questions(claim, article_context)
-        
-        # 2. 修正欄位不對齊：將 "questions" 的第一項 存入 "query"
-        if query_plan.get("questions"):
-            # 建立一個新的字典來符合 Retriever 的輸入格式
-            search_payload = query_plan.copy()
-            search_payload["query"] = query_plan["questions"][0] # 抓第一個問題來搜
-        else:
-            search_payload = {"query": claim} # 備案：直接搜論點本身
+    def process_single_claim(claim):
+        """
+        封裝單個論點的查核邏輯
+        """
+        try:
+            # 1. 取得 LLM 生成的搜尋計畫 (包含區域、時間範圍與問題)
+            query_plan = checker.generate_search_questions(claim, article_context)
             
-        # 3. 執行搜尋
-        search_result = scraper_handler.query(search_payload, use_local_TF=True)
-        
-        # 4. 取得證據數據
-        evidence_data = None
-        if isinstance(search_result, EvidenceFileHandler):
-            evidence_data = search_result.read()
-            search_result.close()
-        elif isinstance(search_result, Future):
-            evidence_data = search_result.result()
+            # 2. 檢查是否生成了有效問題。若無則不呼叫 Scraper 直接返回警告。
+            questions = query_plan.get("questions")
+            if not questions or not isinstance(questions, list) or len(questions) == 0:
+                return {
+                    "claim": claim,
+                    "fact": "⚠️ 該論點無法生成良好搜尋字串，查核終止。",
+                    "url": "#",
+                    "status": "incorrect"
+                }
+            
+            # 3. 根據先前要求：使用關鍵字生成器優化第一條問題
+            # 確保傳給 Tavily 的是精簡的關鍵字而非冗長問題
+            keywords = checker.generate_search_keywords(questions[0])
+            primary_query = keywords[0] if (keywords and len(keywords) > 0) else questions[0]
 
-        # 如果搜尋失敗，則顯示失敗原因
-        if not evidence_data:
-            evidence_text = "搜尋失敗 (API 無回傳)"
-            evidence_url = "#"
-        else:
-            # 確保讀取到 Tavily 生成的摘要
-            evidence_text = evidence_data.get("summary", "搜尋結果無摘要")
-            # 取得第一個網頁來源的連結
-            results = evidence_data.get("results", [])
-            evidence_url = results[0].get("link", "#") if results else "#"
+            # 4. 組合搜尋 Payload
+            search_payload = {
+                "query": primary_query,
+                "search_region": query_plan.get("search_region", "Taiwan"),
+                "search_duration": query_plan.get("search_duration", "all_time")
+            }
+                
+            # 5. 執行搜尋 (此時已確保 query 非 None)
+            search_result = scraper_handler.query(
+                search_payload, 
+                use_local_TF=True, 
+                level=EvidenceRetrieveHandler.ADVANCED
+            )
+            
+            # 6. 取得證據數據
+            evidence_data = None
+            if isinstance(search_result, EvidenceFileHandler):
+                evidence_data = search_result.read()
+                search_result.close()
+            elif isinstance(search_result, Future):
+                evidence_data = search_result.result()
 
-        # 5. 讓 LLM 進行判定
-        verification = checker.verify_claim(claim, evidence_text)
-        
-        final_results.append({
-            "claim": claim,
-            "fact": verification.get("reason"),
-            "url": evidence_url,
-            "status": "correct" if verification.get("verdict") == "Correct" else "incorrect"
-        })
+            if not evidence_data:
+                evidence_text = "搜尋失敗 (API 無回傳)"
+                evidence_url = "#"
+            else:
+                evidence_text = evidence_data.get("summary", "搜尋結果無摘要")
+                results = evidence_data.get("results", [])
+                evidence_url = results[0].get("link", "#") if results else "#"
+
+            # 7. 讓 LLM 進行最後真偽判定
+            verification = checker.verify_claim(claim, evidence_text)
+            
+            return {
+                "claim": claim,
+                "fact": verification.get("reason"),
+                "url": evidence_url,
+                "status": "correct" if verification.get("verdict") == "Correct" else "incorrect"
+            }
+        except Exception as e:
+            # 單個論點出錯時的備案，避免毀掉整個報告
+            return {
+                "claim": claim,
+                "fact": f"查核過程發生錯誤：{str(e)}",
+                "url": "#",
+                "status": "incorrect"
+            }
+
+    # [cite_start]使用 ThreadPoolExecutor 並發執行 [cite: 2]
+    max_workers = min(len(claims), 10) if claims else 1
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        final_results = list(executor.map(process_single_claim, claims))
         
     return final_results
