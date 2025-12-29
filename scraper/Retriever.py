@@ -3,9 +3,13 @@ from API_KEY import TAVILY_API_KEY as API_KEY
 # API_KEY = os.getenv("TAVILY_API_KEY")
 
 from tavily import TavilyClient
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
+
 from scraper.JsonFileHandler import JsonFileHandler
+
 
 class Retriever():
     """
@@ -17,6 +21,8 @@ class Retriever():
     DEFAULT_COUNTRY = None  # not specified
     DEFAULT_TOPIC = "general"
     IGNORE_TIME_DURATION = "all_time"
+    TIME_DURATION_YEAR = "last_year"
+    TIME_DURATION_MONTH = "last_month"
 
     def __init__(self):
         self.__client = TavilyClient(api_key=API_KEY)
@@ -30,13 +36,8 @@ class Retriever():
         
         start_date = None
         end_date = None
-        if "search_duration" in query and \
-            query["search_duration"] != self.IGNORE_TIME_DURATION and \
-            isinstance(query["search_duration"], list) and \
-            len(query["search_duration"]) == 2:
-
-            start_date = query["search_duration"][0]
-            end_date = query["search_duration"][1]
+        if "search_duration" in query:
+            start_date, end_date = self.__parse_time_duration(query["search_duration"])
 
         try:
             response = self.__client.search(
@@ -61,7 +62,7 @@ class Retriever():
 
         # --- Parsing Response ---
         output = dict()
-        output["summary"] = response.get("answer", "")
+        output["summary"] = response.get("answer", None)
         output["query"] = response.get("query", query["query"])
         output["response_time"] = response.get("response_time", 0.0)
         output["usage"] = response.get("usage", dict())
@@ -69,11 +70,13 @@ class Retriever():
         raw_results = response.get("results", [])
         cleaned_results = []
 
+        evidence = ""
         if isinstance(raw_results, list):
-            for res in raw_results:
+            for i, res in enumerate(raw_results, start=1):
                 raw_text = res.get("raw_content", "")
                 content_with_chunks = res.get("content", "")
-
+                
+                # conclude
                 item = {
                     "title": res.get("title", ""),
                     "link": res.get("url", ""),
@@ -82,8 +85,22 @@ class Retriever():
                     "score": res.get("score", 0.0)
                 }
                 cleaned_results.append(item)
-        
+
+                # connect chunks
+                chunk_content = ""
+                for j, chunk in enumerate(item["chunks"], start=1):
+                    if isinstance(chunk, str) and len(chunk) > 0:
+                        chunk_content += f"\n<<chunk {j}>>:\n{chunk}\n"
+                if len(chunk_content) > 0:
+                    evidence += f"\n\n<result {i}>:\n{chunk_content}\n"
         output["results"] = cleaned_results
+        
+        # evidence
+        if output["summary"] is not None:
+            output["evidence"] = f"<summary>:\n{output['summary']}\n"
+            # output["temp_evidence"] = evidence.strip()
+        else:
+            output["evidence"] = evidence.strip()
 
         return output
     
@@ -96,6 +113,23 @@ class Retriever():
             "Global": None
         }
         return country_map.get(country, country.lower())
+    
+    def __parse_time_duration(self, time_duration: Optional[str]) -> list[Union[str, None]]:
+        DEFAULT = [None, None]
+        if not time_duration:
+            return DEFAULT
+        
+        if time_duration == self.IGNORE_TIME_DURATION:
+            return DEFAULT
+        
+        today = datetime.now()
+        if time_duration == self.TIME_DURATION_YEAR:
+            return [(today - relativedelta(years=1)).strftime("%Y-%m-%d"), today.strftime("%Y-%m-%d")]
+        
+        if time_duration == self.TIME_DURATION_MONTH:
+            return  [(today - relativedelta(months=1)).strftime("%Y-%m-%d"), today.strftime("%Y-%m-%d")]
+
+        return DEFAULT
 
     def __topic_check(self, topic: str) -> str:
         if topic.lower() in ("general", "news", "finance"):
