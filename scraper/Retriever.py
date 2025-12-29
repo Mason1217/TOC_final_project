@@ -1,6 +1,6 @@
-# from API_KEY import TAVILY_API_KEY as API_KEY
-import os # 改從環境變數讀取(for Zeabur)
-API_KEY = os.getenv("TAVILY_API_KEY")
+from API_KEY import TAVILY_API_KEY as API_KEY
+# import os # 改從環境變數讀取(for Zeabur)
+# API_KEY = os.getenv("TAVILY_API_KEY")
 
 from tavily import TavilyClient
 import re
