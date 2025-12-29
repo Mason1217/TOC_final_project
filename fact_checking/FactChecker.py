@@ -4,7 +4,7 @@ from typing import List, Dict, Any
 
 from .OllamaClient import OllamaClient
 
-DEBUG = 0
+DEBUG = 1
 
 class FactChecker:
     def __init__(self, client: OllamaClient):
@@ -271,8 +271,7 @@ class FactChecker:
             safe_output["claims"] = []
 
         if DEBUG:
-            print(f"[claims]\n{safe_output["claims"]}\n[claims]\n")
-
+            print(f"[claims]:\n{safe_output['claims']}\n[claims]")
 
         return safe_output
 
@@ -355,6 +354,6 @@ class FactChecker:
             safe_output["error"] = "No questions generated"
 
         if DEBUG:
-            print(f"[questions]\n{safe_output["questions"]}\n[questions]\n")
+            print(f"[questions]\n{safe_output['questions']}\n[questions]\n")
 
         return safe_output
