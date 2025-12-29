@@ -3,7 +3,9 @@ import json
 import re
 from typing import Dict, Any, List, Union, Optional
 
-from API_KEY import OLLAMA_API_KEY as KEY
+# from API_KEY import OLLAMA_API_KEY as KEY
+import os # 改從環境變數讀取(for Zeabur)
+KEY = os.getenv("OLLAMA_API_KEY")
 
 DEBUG = 1
 API_URL = "https://api-gateway.netdb.csie.ncku.edu.tw/api/chat"
