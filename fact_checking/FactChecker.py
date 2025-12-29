@@ -271,7 +271,7 @@ class FactChecker:
             safe_output["claims"] = []
 
         if DEBUG:
-            print(f"[claims]:\n{safe_output["claims"]}\n[claims]")
+            print(f"[claims]:\n{safe_output['claims']}\n[claims]")
 
         return safe_output
 
@@ -354,6 +354,6 @@ class FactChecker:
             safe_output["error"] = "No questions generated"
 
         if DEBUG:
-            print(f"[questions]\n{safe_output["questions"]}\n[questions]\n")
+            print(f"[questions]\n{safe_output['questions']}\n[questions]\n")
 
         return safe_output
