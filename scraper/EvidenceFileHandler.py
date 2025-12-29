@@ -99,9 +99,3 @@ class EvidenceFileHandler(JsonFileHandler):
         if "file_id" in store_data:
             del store_data["file_id"]
         super().write(store_data)
-
-
-if __name__ == "__main__":
-    EvidenceFileHandler.store({
-        
-    })
