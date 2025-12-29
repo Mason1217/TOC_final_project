@@ -66,7 +66,8 @@
 {
     # --- 核心資訊 ---
     "summary": "Tavily 生成的簡短回答...",  # (str) 針對 Query 的直接回答 (Answer)
-    "query": "原始查詢字串",              # (str) 用來確認這是針對哪個 Query 的結果
+    "query": "原始查詢字串",                # (str) 用來確認這是針對哪個 Query 的結果
+    "evidence": "summary or chunks 片段",  # (str) 整篇搜索的整合
     
     # --- 搜尋結果列表 ---
     "results": [
@@ -86,10 +87,8 @@
     # --- 系統資訊 ---
     "file_id": "evidence1.json",        # (str) 此結果儲存在本地的檔名 (由 Handler 自動附加)
     "response_time": 1.25,              # (float) API 回應耗時 (秒)
-    "usage": {                          # (dict) Token 使用量資訊
-        "completion_tokens": 0,
-        "prompt_tokens": 0,
-        "total_tokens": 0
+    "usage": {                          # (dict) credits 使用量資訊
+        "credits": 2
     }
 }
 ```
