@@ -4,6 +4,8 @@ from typing import List, Dict, Any
 
 from .OllamaClient import OllamaClient
 
+DEBUG = 0
+
 class FactChecker:
     def __init__(self, client: OllamaClient):
         self.client = client
@@ -195,17 +197,28 @@ class FactChecker:
 
         """
         system_prompt = """
-        你是一個公正的法官。
-        請比對「原始主張」與「搜尋到的證據」，判斷主張的真實性。
+        你是一個公正且具備邏輯推理能力的查核法官。
+        請比對「原始主張 (Claim)」與「搜尋證據 (Evidence)」，判斷主張的真實性。
+        
+        【判定規則 (請嚴格遵守)】：
+        1. **證據不足 (Missing Evidence)**：
+           - 如果證據內容為 "None"、空字串，或明確表示「找不到相關資料」，請務必判定為 **Unverifiable**，信心分數給 0。
+           - **絕對不可**因為找不到資料就判定為 Incorrect。
 
-        注意：「搜尋證據」可能是一段總結摘要，也可能是原始文章中與搜尋相近的部份。
-        請綜合所有證據內容來進行判斷。如果證據不足以支持或反駁，請標記為 Unverifiable。
+        2. **語義相符 (Semantic Match)**：
+           - 不要只做字面比對。如果證據支持主張的核心概念，應判定為 **Correct**。
+           - 如果人名、地名或關鍵事件相符，即使細節（如地點描述）略有不同，仍可視為 Correct。
+
+        3. **部分正確 (Partially Correct)**：
+           - 如果主張中包含多個事實（A和B），證據只支持 A 但未提及 B（且未反駁 B），請判定為 **Correct** 或 **Unverifiable** (視 A 的重要性而定)，不要直接判 Incorrect。
+
+        4. **語言要求**：JSON 內的所有文字內容（reason, verdict）必須嚴格使用「繁體中文」。
 
         請回傳 JSON 格式：
         {
             "verdict": "Correct" | "Incorrect" | "Unverifiable",
-            "confidence_score": 0-10,
-            "reason": "請引用證據說明判定理由"
+            "confidence_score": 0-10 (0為無法判斷，10為完全確信),
+            "reason": "請引用證據說明判定理由，若證據不足請直說。"
         }
         """
         
@@ -256,6 +269,10 @@ class FactChecker:
             ]
         else:
             safe_output["claims"] = []
+
+        if DEBUG:
+            print(f"[claims]\n{safe_output["claims"]}\n[claims]\n")
+
 
         return safe_output
 
@@ -336,5 +353,8 @@ class FactChecker:
 
         if not safe_output["questions"]:
             safe_output["error"] = "No questions generated"
+
+        if DEBUG:
+            print(f"[questions]\n{safe_output["questions"]}\n[questions]\n")
 
         return safe_output
